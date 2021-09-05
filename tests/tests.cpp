@@ -29,11 +29,11 @@ void CompareDatabaseEquality(const bakery::Database& a, const bakery::Database& 
 
     for (const auto& [trans1, trans2] : Zip(first, second))
     {
-        ASSERT_EQ(trans1.first, trans2.first);
-        ASSERT_DOUBLE_EQ(trans1.second.gratuity, trans2.second.gratuity);
+        ASSERT_EQ(trans1.orderNumber, trans2.orderNumber);
+        ASSERT_DOUBLE_EQ(trans1.gratuity, trans2.gratuity);
 
-        const std::vector<int> purchases1 = trans1.second.GetPurchases();
-        const std::vector<int> purchases2 = trans2.second.GetPurchases();
+        const std::vector<int> purchases1 = trans1.GetPurchases();
+        const std::vector<int> purchases2 = trans2.GetPurchases();
 
         ASSERT_FALSE(purchases1.empty());
         ASSERT_EQ(purchases1.size(), purchases2.size());
@@ -48,12 +48,13 @@ TEST_F(DatabaseTests, Generation)
 {
     // Transactions all have a unique
     const auto transactions = bakery::GenerateTransactions(7);
-    const auto purchaseMapping = bakery::GeneratePurchaseMapping(transactions);;
+    const auto purchaseMapping = bakery::GeneratePurchaseMapping(transactions);
 
     // evaluate food purchases
-    for (const auto& [orderNumber, transaction] : transactions)
+    for (const auto& transaction : transactions)
     {
-        ASSERT_EQ(transaction.purchases.size(), purchaseMapping.count(orderNumber));
+        const auto orderNumber = transaction.orderNumber;
+        ASSERT_EQ(transaction.GetPurchases().size(), purchaseMapping.count(orderNumber));
 
         std::unordered_map<int, int> itemCounts;
         std::unordered_map<int, int> mappingCounts;

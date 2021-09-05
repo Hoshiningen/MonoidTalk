@@ -11,6 +11,30 @@ namespace queries
 {
 using MinMaxFood = std::pair<bakery::FoodType, bakery::FoodType>;
 
+template <typename T>
+void Chunk(const std::span<const T>& span, std::size_t numChunks, std::vector<std::span<const T>>& subspans)
+{
+    // This is pretty lame, but I don't want to spend the time to get this working right.
+    if (numChunks > span.size() || span.size() % numChunks != 0)
+        throw std::invalid_argument{ "Can't evenly chunk the container." };
+
+    subspans.clear();
+
+    // Determine the amount of work to do on each thread
+    const std::ptrdiff_t chunkSize = span.size() / numChunks;
+    for (auto i = 1; i <= numChunks; ++i)
+    {
+        //spans.emplace_back(
+        //    std::next(container.cbegin(), (i - 1) * chunkSize),
+        //    std::next(container.cbegin(), i * chunkSize));
+
+        const int offset = (i - 1) * chunkSize;
+        const int count = i * chunkSize - offset;
+
+        subspans.push_back(span.subspan(offset, count));
+    }
+}
+
 template <typename Container, typename Value = typename Container::value_type>
     requires std::contiguous_iterator<typename Container::const_iterator>
 void Chunk(const Container& container, std::size_t numChunks, std::vector<std::span<const Value>>& spans)
@@ -47,7 +71,10 @@ Monoid MapReduce(const std::span<const T>& span, Mapper map, Reducer reducer)
 class QueryStrategies
 {
 public:
-    QueryStrategies(const bakery::Database& database, int count);
+    QueryStrategies(const bakery::Database& database, const std::span<const bakery::Transaction>& span)
+        : m_database(database), m_span(span)
+    {}
+
     virtual ~QueryStrategies() = default;
 
     virtual MinMaxFood GetGreatestAndLeastPopularItems() = 0;
@@ -55,9 +82,8 @@ public:
     virtual std::size_t GetLargestNumberOfPurachasesMade() = 0;
 
 protected:
-
     const bakery::Database& m_database;
-    std::vector<bakery::Transaction> m_transactions;
+    const std::span<const bakery::Transaction>& m_span;
 };
 
 class Sequential : public QueryStrategies

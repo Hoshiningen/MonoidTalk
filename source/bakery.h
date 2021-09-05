@@ -4,6 +4,7 @@
 #include <compare>
 #include <filesystem>
 #include <ranges>
+#include <span>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -60,8 +61,8 @@ using Hashtable = std::unordered_map<int, DBItem>;
 template<typename DBItem>
 using MultiHashtable = std::unordered_multimap<int, DBItem>;
 
-Hashtable<Transaction> GenerateTransactions(std::size_t amount);
-MultiHashtable<PurchaseMapping> GeneratePurchaseMapping(const Hashtable<Transaction>& transactions);
+std::vector<Transaction> GenerateTransactions(std::size_t amount);
+MultiHashtable<PurchaseMapping> GeneratePurchaseMapping(const std::vector<Transaction>& transactions);
 
 class Database
 {
@@ -79,11 +80,19 @@ public:
     const FoodItem& GetFood(int ID) const { return m_foods.at(ID); }
     const Hashtable<FoodItem>& GetFoods() const { return m_foods; }
 
-    const Hashtable<Transaction>& GetTransactions() const { return m_transactions; }
-    auto GetTransactions(int count) const { return std::ranges::take_view(m_transactions, count); }
+    const std::vector<Transaction>& GetTransactions() const { return m_transactions; }
+
+    // Update this to return a const span
+    std::span<const Transaction> GetTransactions(std::size_t count) const
+    {
+        if (count > m_transactions.size())
+            return {};
+
+        return { std::cbegin(m_transactions), std::next(std::cbegin(m_transactions), count) };
+    }
 
 private:
     const Hashtable<FoodItem>& m_foods;
-    Hashtable<Transaction> m_transactions;
+    std::vector<Transaction> m_transactions;
 };
 }

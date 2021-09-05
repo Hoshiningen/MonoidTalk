@@ -296,7 +296,7 @@ Hashtable<Transaction> GenerateTransactions(std::size_t amount)
     return transactions;
 }
 #else
-Hashtable<Transaction> GenerateTransactions(std::size_t amount)
+std::vector<Transaction> GenerateTransactions(std::size_t amount)
 {
 #ifdef SeededRandom
     Random random{ 777 };
@@ -304,13 +304,13 @@ Hashtable<Transaction> GenerateTransactions(std::size_t amount)
     Random random;
 #endif
 
-    Hashtable<Transaction> transactions;
+    std::vector<Transaction> transactions;
     if (amount <= 0)
         return transactions;
 
     for (auto index = 0; index < amount; ++index)
     {
-        transactions.emplace(index, Transaction{
+        transactions.push_back(Transaction{
             .orderNumber = index,
             .gratuity = GenerateGratuity(random),
             .purchases = GenerateTicket(GenerateFoods(), random)
@@ -322,14 +322,14 @@ Hashtable<Transaction> GenerateTransactions(std::size_t amount)
 #endif
 
 
-MultiHashtable<PurchaseMapping> GeneratePurchaseMapping(const Hashtable<Transaction>& transactions)
+MultiHashtable<PurchaseMapping> GeneratePurchaseMapping(const std::vector<Transaction>& transactions)
 {
     MultiHashtable<PurchaseMapping> purchaseMapping;
     if (transactions.empty())
         return purchaseMapping;
 
     const bakery::Hashtable<FoodItem>& foods = GenerateFoods();
-    for (const auto& [orderNumber, transaction] : transactions)
+    for (const auto& transaction : transactions)
     {
         for (int foodID : transaction.GetPurchases())
         {
@@ -375,7 +375,7 @@ void Database::Save(const std::filesystem::path& directory) const
     std::ofstream transactionsDB{ transDBPath };
     std::ofstream purchasedItemsDB{ purchasedDBPath };
 
-    for (const auto& [_, transaction] : m_transactions)
+    for (const auto& transaction : m_transactions)
         transactionsDB << transaction;
 
     for (const auto& [_, purchaseMapping] : GeneratePurchaseMapping(m_transactions))
@@ -402,7 +402,7 @@ bool Database::Load(const std::filesystem::path& directory)
     std::ifstream purchasedItemsDB{ purchasedDBPath };
 
     std::for_each(std::istream_iterator<Transaction>(transactionsDB), std::istream_iterator<Transaction>(),
-        [this](const Transaction& item) { m_transactions[item.orderNumber] = item; });
+        [this](const Transaction& item) { m_transactions.push_back(item); });
 
     std::for_each(std::istream_iterator<PurchaseMapping>(purchasedItemsDB), std::istream_iterator<PurchaseMapping>(),
         [&purchaseMapping](const PurchaseMapping& item) { purchaseMapping.emplace(item.orderNumber, item); });
@@ -410,9 +410,9 @@ bool Database::Load(const std::filesystem::path& directory)
     if (purchaseMapping.empty())
         return false;
 
-    for (auto& [orderNumber, transaction] : m_transactions)
+    for (auto& transaction : m_transactions)
     {
-        const auto& [begin, end] = purchaseMapping.equal_range(orderNumber);
+        const auto& [begin, end] = purchaseMapping.equal_range(transaction.orderNumber);
         std::for_each(begin, end, [this, &transaction](const std::pair<int, PurchaseMapping>& pair) {
             transaction.purchases.set(pair.second.foodID);
         });
