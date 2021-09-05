@@ -12,6 +12,9 @@
 
 int main()
 {
+    const auto result = bakery::GenerateTransactionsParallel(100);
+
+    int i = 0;
    // bakery::Database database{1'000'000};
     
     //queries::MapReduceParallel query{ database, 1000 };

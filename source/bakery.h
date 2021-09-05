@@ -61,7 +61,9 @@ using Hashtable = std::unordered_map<int, DBItem>;
 template<typename DBItem>
 using MultiHashtable = std::unordered_multimap<int, DBItem>;
 
-std::vector<Transaction> GenerateTransactions(std::size_t amount);
+
+std::vector<Transaction> GenerateTransactionsSequential(std::size_t amount);
+std::vector<Transaction> GenerateTransactionsParallel(std::size_t amount);
 MultiHashtable<PurchaseMapping> GeneratePurchaseMapping(const std::vector<Transaction>& transactions);
 
 class Database
@@ -69,6 +71,8 @@ class Database
 public:
     Database();
     explicit Database(std::size_t amount);
+
+    Database(std::size_t amount, bool parallelCreation);
 
     auto operator<=>(const Database&) const = default;
 

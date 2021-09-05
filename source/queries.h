@@ -12,7 +12,7 @@ namespace queries
 using MinMaxFood = std::pair<bakery::FoodType, bakery::FoodType>;
 
 template <typename T>
-void Chunk(const std::span<const T>& span, std::size_t numChunks, std::vector<std::span<const T>>& subspans)
+void Chunk(const std::span<T>& span, std::size_t numChunks, std::vector<std::span<T>>& subspans)
 {
     // This is pretty lame, but I don't want to spend the time to get this working right.
     if (numChunks > span.size() || span.size() % numChunks != 0)
@@ -24,10 +24,6 @@ void Chunk(const std::span<const T>& span, std::size_t numChunks, std::vector<st
     const std::ptrdiff_t chunkSize = span.size() / numChunks;
     for (auto i = 1; i <= numChunks; ++i)
     {
-        //spans.emplace_back(
-        //    std::next(container.cbegin(), (i - 1) * chunkSize),
-        //    std::next(container.cbegin(), i * chunkSize));
-
         const int offset = (i - 1) * chunkSize;
         const int count = i * chunkSize - offset;
 
@@ -37,7 +33,7 @@ void Chunk(const std::span<const T>& span, std::size_t numChunks, std::vector<st
 
 template <typename Container, typename Value = typename Container::value_type>
     requires std::contiguous_iterator<typename Container::const_iterator>
-void Chunk(const Container& container, std::size_t numChunks, std::vector<std::span<const Value>>& spans)
+void Chunk(Container& container, std::size_t numChunks, std::vector<std::span<Value>>& spans)
 {
     // This is pretty lame, but I don't want to spend the time to get this working right.
     if (numChunks > container.size() || container.size() % numChunks != 0)
@@ -50,8 +46,8 @@ void Chunk(const Container& container, std::size_t numChunks, std::vector<std::s
     for (auto i = 1; i <= numChunks; ++i)
     {
         spans.emplace_back(
-            std::next(container.cbegin(), (i - 1) * chunkSize),
-            std::next(container.cbegin(), i * chunkSize));
+            std::next(container.begin(), (i - 1) * chunkSize),
+            std::next(container.begin(), i * chunkSize));
     }
 }
 

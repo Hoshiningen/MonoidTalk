@@ -1,4 +1,5 @@
 #include "bakery.h"
+#include "queries.h"
 
 #include <array>
 #include <execution>
@@ -241,9 +242,7 @@ const Hashtable<FoodItem>& GenerateFoods()
     return foods;
 }
 
-//#define PerfGenerate
-#ifdef PerfGenerate
-Hashtable<Transaction> GenerateTransactions(std::size_t amount)
+std::vector<Transaction> GenerateTransactionsParallel(std::size_t amount)
 {
 #ifdef SeededRandom
     Random random{ 777 };
@@ -251,52 +250,47 @@ Hashtable<Transaction> GenerateTransactions(std::size_t amount)
     Random random;
 #endif
 
-    Hashtable<Transaction> transactions;
+    std::vector<Transaction> transactions;
     if (amount <= 0)
         return transactions;
 
-    const auto DoWork = [&transactions](int minID, int maxID, Random& random)
+    transactions.resize(amount);
+
+    // Chunk up the work...
+    std::vector<std::span<Transaction>> chunks;
+    queries::Chunk(transactions, std::thread::hardware_concurrency(), chunks);
+
+    const auto CreateTransactions = [&random](const std::span<Transaction>& span, int minID, int maxID)
     {
-        static std::mutex workMutex;
-        while (minID <= maxID)
+        if ((maxID - minID) != span.size())
+            throw std::logic_error{ "Invalid min / max range" };
+
+        for (Transaction& trans : span)
         {
-            std::scoped_lock<std::mutex> lock{ workMutex };
-
-            transactions.emplace(minID, Transaction{
-                .orderNumber = minID,
-                .gratuity = GenerateGratuity(random),
-                .purchases = GenerateTicket(GenerateFoods(), random)
-            });
-
-            minID++;
+            trans.orderNumber = minID++;
+            trans.gratuity = GenerateGratuity(random);
+            trans.purchases = GenerateTicket(GenerateFoods(), random);
         }
     };
 
-    const int numThreads = std::jthread::hardware_concurrency();
-    const int extras = static_cast<int>(amount % numThreads);
-    const int blockSize = static_cast<int>((amount - extras) / numThreads);
-    
-    //std::vector<std::future<void>> futures;
-    //for (auto threadIndex = 0; threadIndex < numThreads; ++threadIndex)
-    //{
-    //    const int extraAmount = (threadIndex == numThreads - 1 ? extras : 0);
-    //    const int minRange = blockSize * threadIndex;
-    //    const int maxRange = (threadIndex + 1) * blockSize - 1 + extraAmount;
-    //
-    //    std::async(std::launch::async, DoWork, minRange, maxRange, std::ref(random));
-    //}
-   
-    std::future<void> future1 = std::async(std::launch::async, DoWork, blockSize * 1, (1 + 1) * blockSize - 1, std::ref(random));
-    std::future<void> future2 = std::async(std::launch::async, DoWork, blockSize * 2, (2 + 1) * blockSize - 1, std::ref(random));
-    std::future<void> future3 = std::async(std::launch::async, DoWork, blockSize * 3, (3 + 1) * blockSize - 1, std::ref(random));
-    std::future<void> future4 = std::async(std::launch::async, DoWork, blockSize * 4, (4 + 1) * blockSize - 1, std::ref(random));
+    static ThreadPool pool;
+    std::vector<std::future<void>> futures;
 
-    //std::ranges::for_each(futures, [](const std::future<void>& future) { future.wait(); });
+    for (auto i = 1; i <= chunks.size(); ++i)
+    {
+        const auto& chunk = chunks[i - 1];
+        const int minID = (i - 1) * chunk.size();
+        const int maxID = i * chunk.size();
+
+        futures.push_back(pool.Run(CreateTransactions, chunk, minID, maxID));
+    }
+
+    std::ranges::for_each(futures, [](auto& future) { future.get(); });
 
     return transactions;
 }
-#else
-std::vector<Transaction> GenerateTransactions(std::size_t amount)
+
+std::vector<Transaction> GenerateTransactionsSequential(std::size_t amount)
 {
 #ifdef SeededRandom
     Random random{ 777 };
@@ -319,8 +313,6 @@ std::vector<Transaction> GenerateTransactions(std::size_t amount)
 
     return transactions;
 }
-#endif
-
 
 MultiHashtable<PurchaseMapping> GeneratePurchaseMapping(const std::vector<Transaction>& transactions)
 {
@@ -361,8 +353,14 @@ Database::Database()
 {}
 
 Database::Database(std::size_t amount)
-    : m_foods(GenerateFoods()), m_transactions(GenerateTransactions(amount))
+    : m_foods(GenerateFoods()), m_transactions(GenerateTransactionsSequential(amount))
 {}
+
+Database::Database(std::size_t amount, bool parallelCreation)
+    : m_foods(GenerateFoods())
+{
+    m_transactions = parallelCreation ? GenerateTransactionsParallel(amount) : GenerateTransactionsSequential(amount);
+}
 
 void Database::Save(const std::filesystem::path& directory) const
 {

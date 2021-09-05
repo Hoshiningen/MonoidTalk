@@ -47,7 +47,7 @@ void CompareDatabaseEquality(const bakery::Database& a, const bakery::Database& 
 TEST_F(DatabaseTests, Generation)
 {
     // Transactions all have a unique
-    const auto transactions = bakery::GenerateTransactions(7);
+    const auto transactions = bakery::GenerateTransactionsSequential(7);
     const auto purchaseMapping = bakery::GeneratePurchaseMapping(transactions);
 
     // evaluate food purchases
