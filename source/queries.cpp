@@ -1,79 +1,32 @@
 #include "queries.h"
 
-#include <execution>
 #include <numeric>
 #include <ranges>
 
-namespace
-{
-template<typename Container, typename Op, typename T = Container::value_type>
-T LeftFold(const Container& container, T init, Op binaryOp)
-{
-    return std::accumulate(
-        container.cbegin(), 
-        container.cend(), 
-        init,
-        binaryOp
-    );
-}
-
-template<typename Container, typename Op, typename T = Container::value_type>
-T LeftFold2(const Container& container, T init, Op binOp)
-{
-    return std::reduce(
-        std::execution::par,
-        container.cbegin(), 
-        container.cend(), 
-        init,
-        binOp);
-}
-
-template<typename Container, typename Op, typename T = Container::value_type>
-T RightFold(const Container& container, T init, Op binOp)
-{
-    const auto ReverseParameters = [&](const T& a, const T& b) { return binOp(b, a); };
-    return std::accumulate(container.crbegin(), container.crend(), init, ReverseParameters);
-}
-
-template<typename Container, typename Op, typename T = Container::value_type>
-T RightFold2(const Container& container, T init, Op binOp)
-{
-    return std::reduce(
-        std::execution::par,
-        container.crbegin(),
-        container.crend(),
-        init,
-        [&](const T& a, const T& b) { return binOp(b, a); }
-    );
-}
-} //unnamed namespace
-
 namespace queries
 {
-MinMaxFood Sequential::GetGreatestAndLeastPopularItems()
+MinMaxFood Sequential::GetGreatestAndLeastPopularItems(const std::span<const bakery::Transaction>& span)
 {
-    std::unordered_map<bakery::FoodType, int> counts;
-    for (const auto& transaction : m_span)
+    std::array<int, 6> counts{};
+    for (const auto& transaction : span)
     {
         for (int foodID : transaction.GetPurchases())
         {
             const bakery::FoodItem& food = m_database.GetFood(foodID);
-            counts[food.type]++;
+            ++counts.at(static_cast<std::size_t>(food.type));
         }
     }
 
-    const auto Predicate = [](const auto& a, const auto& b) {
-        return a.second < b.second;
-    };
+    const auto& [min, max] = std::ranges::minmax_element(counts);
 
-    const auto& [min, max] = std::ranges::minmax_element(counts, Predicate);
-    return { min->first, max->first };
+    return {static_cast<bakery::FoodType>(std::distance(std::begin(counts), min)),
+            static_cast<bakery::FoodType>(std::distance(std::begin(counts), max))};
 }
 
-std::size_t Sequential::GetNumberOfTransactionsOver15()
+std::size_t Sequential::GetNumberOfTransactionsOver15(const std::span<const bakery::Transaction>& span)
 {
     std::size_t count = 0;
-    for (const auto& transaction : m_span)
+    for (const auto& transaction : span)
     {
         double total = 0.0;
         for (int foodID : transaction.GetPurchases())
@@ -89,10 +42,10 @@ std::size_t Sequential::GetNumberOfTransactionsOver15()
     return count;
 }
 
-std::size_t Sequential::GetLargestNumberOfPurachasesMade()
+std::size_t Sequential::GetLargestNumberOfPurachasesMade(const std::span<const bakery::Transaction>& span)
 {
     std::size_t maxPurchases = 0;
-    for (const auto& transaction : m_span)
+    for (const auto& transaction : span)
         maxPurchases = std::max(maxPurchases, transaction.GetPurchases().size());
 
     return maxPurchases;
@@ -100,47 +53,115 @@ std::size_t Sequential::GetLargestNumberOfPurachasesMade()
 
 
 
-
-MinMaxFood SequentialIA::GetGreatestAndLeastPopularItems()
+MinMaxFood SequentialIA::GetGreatestAndLeastPopularItems(const std::span<const bakery::Transaction>& span)
 {
-    return MinMaxFood();
+    const auto CountFoodTypes = [this](const std::span<const bakery::Transaction>& span, const auto& prev)
+    {
+        std::array<int, 6> counts = prev;
+        for (const auto& transaction : span)
+        {
+            for (int foodID : transaction.GetPurchases())
+            {
+                const bakery::FoodItem& food = m_database.GetFood(foodID);
+                ++counts.at(static_cast<std::size_t>(food.type));
+            }
+        }
+
+        return counts;
+    };
+
+    if (m_query1Cache)
+    {
+        const auto deltaSpan = span.subspan(m_query1Cache->span.size());
+
+        m_query1Cache->aggregate = CountFoodTypes(deltaSpan, m_query1Cache->aggregate);
+        m_query1Cache->span = span;
+    }
+    else
+    {
+        m_query1Cache.emplace(span, CountFoodTypes(span, std::array<int, 6>{}));
+    }
+
+    const auto& [min, max] = std::ranges::minmax_element(m_query1Cache->aggregate);
+
+    return {static_cast<bakery::FoodType>(std::distance(std::begin(m_query1Cache->aggregate), min)),
+            static_cast<bakery::FoodType>(std::distance(std::begin(m_query1Cache->aggregate), max))};
 }
 
-std::size_t SequentialIA::GetNumberOfTransactionsOver15()
+std::size_t SequentialIA::GetNumberOfTransactionsOver15(const std::span<const bakery::Transaction>& span)
 {
-    return std::size_t();
+    const auto GetNumTransactionsOver15 = [this](const std::span<const bakery::Transaction>& span, std::size_t prev)
+    {
+        std::size_t count = prev;
+        for (const auto& transaction : span)
+        {
+            double total = 0.0;
+            for (int foodID : transaction.GetPurchases())
+            {
+                const bakery::FoodItem& food = m_database.GetFood(foodID);
+                total += food.cost;
+            }
+
+            if (total > 15.0)
+                ++count;
+        }
+
+        return count;
+    };
+
+    if (m_query2Cache)
+    {
+        const auto deltaSpan = span.subspan(m_query2Cache->span.size());
+
+        m_query2Cache->aggregate = GetNumTransactionsOver15(deltaSpan, m_query2Cache->aggregate);
+        m_query2Cache->span = span;
+    }
+    else
+    {
+        m_query2Cache.emplace(span, GetNumTransactionsOver15(span, 0));
+    }
+
+    return m_query2Cache->aggregate;
 }
 
-std::size_t SequentialIA::GetLargestNumberOfPurachasesMade()
+std::size_t SequentialIA::GetLargestNumberOfPurachasesMade(const std::span<const bakery::Transaction>& span)
 {
-    return std::size_t();
+    const auto GetMaxPurchasesMade = [](const std::span<const bakery::Transaction>& span, std::size_t prev)
+    {
+        std::size_t maxPurchases = prev;
+        for (const auto& transaction : span)
+            maxPurchases = std::max(maxPurchases, transaction.GetPurchases().size());
+
+        return maxPurchases;
+    };
+
+    if (m_query3Cache)
+    {
+        const auto deltaSpan = span.subspan(m_query3Cache->span.size());
+
+        m_query3Cache->aggregate = GetMaxPurchasesMade(deltaSpan, m_query3Cache->aggregate);
+        m_query3Cache->span = span;
+    }
+    else
+    {
+        m_query3Cache.emplace(span, GetMaxPurchasesMade(span, 0));
+    }
+
+    return m_query3Cache->aggregate;
 }
 
 
-/*
-* 1. Run sequential until XXXX items
-* 2. Batch up the rest and parallelize
-*
-* Options for parallelizing this:
-* 1. Map everything in parallel first, then reduce in parallel once mapping is done
-    - There isn't any more computations happening here
-    - O(n + numChunks) space
-* 2. Batch up chunks of work to map-reduce on their own threads, then combine results
-*   - Same amount of computations
-*   - O(2 * numChunks) space
-*/
 
-
-MinMaxFood MapReduceParallel::GetGreatestAndLeastPopularItems()
+MinMaxFood MapReduceParallel::GetGreatestAndLeastPopularItems(const std::span<const bakery::Transaction>& span)
 {
-    using Monoid = std::unordered_map<bakery::FoodType, int>;
+    using Monoid = std::array<int, 6>;
     const auto Map = [this](const auto& transaction)
     {
-        Monoid monoid;
+        Monoid monoid{};
         for (int foodID : transaction.GetPurchases())
         {
             const bakery::FoodItem& food = m_database.GetFood(foodID);
-            ++monoid[food.type];
+            ++monoid.at(static_cast<std::size_t>(food.type));
         }
 
         return monoid;
@@ -149,33 +170,31 @@ MinMaxFood MapReduceParallel::GetGreatestAndLeastPopularItems()
     const auto Reduce = [](const Monoid& aggregate, const Monoid& next)
     {
         Monoid result = aggregate;
-        for (auto& [type, count] : next)
-            result[type] += count;
+        for (std::size_t index = 0; index < result.size(); ++index)
+            result.at(index) += next.at(index);
 
         return result;
     };
 
     std::vector<std::span<const bakery::Transaction>> chunks;
-    Chunk(m_span, m_pool.ThreadCount(), chunks);
+    detail::Chunk(span, m_pool.ThreadCount(), chunks);
 
     std::vector<std::future<Monoid>> futures;
     for (const auto& chunk : chunks)
-        futures.push_back(m_pool.Run([&]() { return MapReduce(chunk, Map, Reduce); }));
+        futures.push_back(m_pool.Run([&]() { return detail::MapReduce(chunk, Map, Reduce); }));
 
     Monoid result = std::accumulate(std::begin(futures), std::end(futures), Monoid{},
         [&](const Monoid& aggregate, std::future<Monoid>& next) {
             return Reduce(aggregate, next.get());
         });
 
-    const auto Predicate = [](const auto& a, const auto& b) {
-        return a.second < b.second;
-    };
+    const auto& [min, max] = std::ranges::minmax_element(result);
 
-    const auto& [min, max] = std::ranges::minmax_element(result, Predicate);
-    return { min->first, max->first };
+    return {static_cast<bakery::FoodType>(std::distance(std::begin(result), min)),
+            static_cast<bakery::FoodType>(std::distance(std::begin(result), max))};
 }
 
-std::size_t MapReduceParallel::GetNumberOfTransactionsOver15()
+std::size_t MapReduceParallel::GetNumberOfTransactionsOver15(const std::span<const bakery::Transaction>& span)
 {
     using Monoid = int;
     const auto Map = [this](const auto& transaction)
@@ -191,11 +210,11 @@ std::size_t MapReduceParallel::GetNumberOfTransactionsOver15()
     };
 
     std::vector<std::span<const bakery::Transaction>> chunks;
-    Chunk(m_span, m_pool.ThreadCount(), chunks);
+    detail::Chunk(span, m_pool.ThreadCount(), chunks);
 
     std::vector<std::future<Monoid>> futures;
     for (const auto& chunk : chunks)
-        futures.push_back(m_pool.Run([&]() { return MapReduce(chunk, Map, std::plus<int>{}); }));
+        futures.push_back(m_pool.Run([&]() { return detail::MapReduce(chunk, Map, std::plus<int>{}); }));
 
     return std::accumulate(std::begin(futures), std::end(futures), Monoid{},
         [&](const Monoid& aggregate, std::future<Monoid>& next) {
@@ -203,7 +222,7 @@ std::size_t MapReduceParallel::GetNumberOfTransactionsOver15()
         });
 }
 
-std::size_t MapReduceParallel::GetLargestNumberOfPurachasesMade()
+std::size_t MapReduceParallel::GetLargestNumberOfPurachasesMade(const std::span<const bakery::Transaction>& span)
 {
     using Monoid = int;
     const auto Map = [this](const auto& transaction) {
@@ -215,33 +234,15 @@ std::size_t MapReduceParallel::GetLargestNumberOfPurachasesMade()
     };
 
     std::vector<std::span<const bakery::Transaction>> chunks;
-    Chunk(m_span, m_pool.ThreadCount(), chunks);
+    detail::Chunk(span, m_pool.ThreadCount(), chunks);
 
     std::vector<std::future<Monoid>> futures;
     for (const auto& chunk : chunks)
-        futures.push_back(m_pool.Run([&]() -> Monoid { return MapReduce(chunk, Map, Reduce); }));
+        futures.push_back(m_pool.Run([&]() -> Monoid { return detail::MapReduce(chunk, Map, Reduce); }));
 
     return std::accumulate(std::begin(futures), std::end(futures), std::numeric_limits<Monoid>::min(),
         [&](const Monoid& aggregate, std::future<Monoid>& next) {
             return Reduce(aggregate, next.get());
         });
-}
-
-
-
-
-MinMaxFood MapReduceParallelIA::GetGreatestAndLeastPopularItems()
-{
-    return MinMaxFood();
-}
-
-std::size_t MapReduceParallelIA::GetNumberOfTransactionsOver15()
-{
-    return std::size_t();
-}
-
-std::size_t MapReduceParallelIA::GetLargestNumberOfPurachasesMade()
-{
-    return std::size_t();
 }
 } // end queries namespace

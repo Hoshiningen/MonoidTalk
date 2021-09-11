@@ -7,13 +7,16 @@
 #include <filesystem>
 #include <future>
 #include <iterator>
-#include <random>
 #include <ranges>
 #include <thread>
 #include <utility>
 
-#define SeededRandom
+#include "ThreadPool.h"
 
+/// <summary>
+/// These all control how the transactions are created. They're a series of
+/// probabilities to span that item on the ticket, under specific conditions.
+/// </summary>
 namespace settings
 {
 // gratuity
@@ -31,35 +34,10 @@ constexpr double kLoafChance = 0.15;
 
 namespace
 {
-class Random
-{
-public:
-    Random() : engine(std::random_device{}()) {}
-    explicit Random(std::mt19937::result_type seed) : engine(seed) {}
+//const std::mt19937::result_type kSeed = std::random_device{}();
+const std::mt19937::result_type kSeed = 777;
 
-    Random(const Random&) = delete;
-    Random& operator=(const Random&) = delete;
-    
-    Random(Random&&) = delete;
-    Random& operator=(Random&&) = delete;
-
-    double Value(double min, double max) {
-        return std::uniform_real_distribution<>{min, max}(engine);
-    }
-
-    int Value(int min, int max) {
-        return std::uniform_int_distribution<>{min, max}(engine);
-    }
-
-    bool Roll(double chance) {
-        return std::bernoulli_distribution{ chance }(engine);
-    }
-
-private:
-    std::mt19937 engine;
-};
-
-int Select(bakery::FoodType type, const bakery::Hashtable<bakery::FoodItem>& foods, Random& random)
+int Select(bakery::FoodType type, const bakery::Hashtable<bakery::FoodItem>& foods, bakery::detail::Random& random)
 {
     const std::size_t count = std::ranges::count_if(foods,
         [&type](const auto& pair) { return pair.second.type == type; });
@@ -76,7 +54,7 @@ int Select(bakery::FoodType type, const bakery::Hashtable<bakery::FoodItem>& foo
     return foundIter->second.foodID;
 }
 
-std::bitset<27> GenerateTicket(const bakery::Hashtable<bakery::FoodItem>& foods, Random& random)
+std::bitset<27> GenerateTicket(const bakery::Hashtable<bakery::FoodItem>& foods, bakery::detail::Random& random)
 {
     std::bitset<27> items;
     if (foods.empty())
@@ -106,7 +84,7 @@ std::bitset<27> GenerateTicket(const bakery::Hashtable<bakery::FoodItem>& foods,
     return items;
 }
 
-double GenerateGratuity(Random& random)
+double GenerateGratuity(bakery::detail::Random& random)
 {
     double gratuity = 0.0;
 
@@ -187,24 +165,6 @@ std::istream& operator>>(std::istream& stream, bakery::PurchaseMapping& item)
     return stream;
 }
 
-std::size_t FoodItem::operator()(const FoodItem& item) const
-{
-    return std::hash<int>{}(item.foodID);
-}
-
-std::size_t Transaction::operator()(const Transaction& item) const
-{
-    return std::hash<int>{}(item.orderNumber);
-}
-
-std::size_t PurchaseMapping::operator()(const PurchaseMapping& item) const
-{
-    const std::size_t hash1 = std::hash<int>{}(item.foodID);
-    const std::size_t hash2 = std::hash<int>{}(item.orderNumber);
-    
-    return hash1 ^ (hash2 << 1);
-}
-
 const Hashtable<FoodItem>& GenerateFoods()
 {
     static const Hashtable<FoodItem> foods =
@@ -242,13 +202,17 @@ const Hashtable<FoodItem>& GenerateFoods()
     return foods;
 }
 
+/// <summary>
+/// This was implemented to speed up database creation with large counts of transactions.
+/// It nearly doubled the performance (see the benchmarks), so I'm not sure why I'm keeping
+/// the sequential version around. I don't care about the minimal performance hit of creating
+/// small databases in parallel.
+/// </summary>
+/// <param name="amount"></param>
+/// <returns></returns>
 std::vector<Transaction> GenerateTransactionsParallel(std::size_t amount)
 {
-#ifdef SeededRandom
-    Random random{ 777 };
-#else
-    Random random;
-#endif
+    detail::Random random{ kSeed };
 
     std::vector<Transaction> transactions;
     if (amount <= 0)
@@ -258,7 +222,7 @@ std::vector<Transaction> GenerateTransactionsParallel(std::size_t amount)
 
     // Chunk up the work...
     std::vector<std::span<Transaction>> chunks;
-    queries::Chunk(transactions, std::thread::hardware_concurrency(), chunks);
+    queries::detail::Chunk(transactions, std::thread::hardware_concurrency(), chunks);
 
     const auto CreateTransactions = [&random](const std::span<Transaction>& span, int minID, int maxID)
     {
@@ -292,11 +256,7 @@ std::vector<Transaction> GenerateTransactionsParallel(std::size_t amount)
 
 std::vector<Transaction> GenerateTransactionsSequential(std::size_t amount)
 {
-#ifdef SeededRandom
-    Random random{ 777 };
-#else
-    Random random;
-#endif
+    detail::Random random{ kSeed };
 
     std::vector<Transaction> transactions;
     if (amount <= 0)
@@ -314,6 +274,10 @@ std::vector<Transaction> GenerateTransactionsSequential(std::size_t amount)
     return transactions;
 }
 
+/// <summary>
+/// These are only used when serializing the database to and from disk. They take up far too much space to
+/// create while testing with huge transaction counts.
+/// </summary>
 MultiHashtable<PurchaseMapping> GeneratePurchaseMapping(const std::vector<Transaction>& transactions)
 {
     MultiHashtable<PurchaseMapping> purchaseMapping;

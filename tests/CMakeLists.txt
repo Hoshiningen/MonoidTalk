@@ -1,4 +1,4 @@
-add_executable(monoid-tests tests.cpp tests.h)
+add_executable(monoid-tests tests.cpp)
 
 target_include_directories(monoid-tests PRIVATE ${SOURCE_DIR})
 
