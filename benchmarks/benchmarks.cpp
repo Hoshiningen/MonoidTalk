@@ -104,7 +104,8 @@ void LeastAndGreatestBM(benchmark::State& state)
         state.SetIterationTime(elapsed.count());
     }
 
-    state.SetItemsProcessed(state.iterations() * spans.at(state.range(0)).size());
+    state.SetItemsProcessed(state.iterations() * currentSpan.size());
+    state.counters["sample_size"] = currentSpan.size();
 }
 
 BENCHMARK_TEMPLATE(LeastAndGreatestBM, queries::MapReduceParallel)
@@ -158,7 +159,8 @@ void LargestNumberOfPurchasesBM(benchmark::State& state)
         state.SetIterationTime(elapsed.count());       
     }
 
-    state.SetItemsProcessed(state.iterations() * spans.at(state.range(0)).size());
+    state.SetItemsProcessed(state.iterations() * currentSpan.size());
+    state.counters["sample_size"] = currentSpan.size();
 }
 
 BENCHMARK_TEMPLATE(LargestNumberOfPurchasesBM, queries::MapReduceParallel)
@@ -205,7 +207,8 @@ void NumberOfTransactionsOver15BM(benchmark::State& state)
         state.SetIterationTime(elapsed.count());
     }
 
-    state.SetItemsProcessed(state.iterations() * spans.at(state.range(0)).size());
+    state.SetItemsProcessed(state.iterations() * currentSpan.size());
+    state.counters["sample_size"] = currentSpan.size();
 }
 
 BENCHMARK_TEMPLATE(NumberOfTransactionsOver15BM, queries::MapReduceParallel)
