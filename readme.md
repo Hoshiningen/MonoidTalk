@@ -6,7 +6,7 @@ There are a series of benchmarks to profile the database queries, and there are 
 
 ## Building
 
-This is built using C++20 and has a few dependencies that are fetched during configuration. See [the cmake folder](cmake) for a list of them. This has only been tested on `MSVC 16.10.4`.
+This is built using C++20 and has a few dependencies that are fetched during configuration. See [the cmake folder](cmake) for a list of them. This has only been tested on `MSVC 19.29.30040.0`.
 
 To build (from the root directory):
 

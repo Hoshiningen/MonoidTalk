@@ -168,4 +168,19 @@ private:
 
     ThreadPool m_pool;
 };
+
+class MapReduceParallelStd : public QueryStrategies
+{
+public:
+    using QueryStrategies::QueryStrategies;
+
+    // Inherited via QueryStrategies
+    virtual MinMaxFood GetGreatestAndLeastPopularItems(const std::span<const bakery::Transaction>& span) override;
+    virtual std::size_t GetNumberOfTransactionsOver15(const std::span<const bakery::Transaction>& span) override;
+    virtual std::size_t GetLargestNumberOfPurachasesMade(const std::span<const bakery::Transaction>& span) override;
+
+private:
+
+    ThreadPool m_pool;
+};
 } // end queries namespace

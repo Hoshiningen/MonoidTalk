@@ -1,5 +1,6 @@
 #include "queries.h"
 
+#include <execution>
 #include <numeric>
 #include <ranges>
 
@@ -244,5 +245,71 @@ std::size_t MapReduceParallel::GetLargestNumberOfPurachasesMade(const std::span<
         [&](const Monoid& aggregate, std::future<Monoid>& next) {
             return Reduce(aggregate, next.get());
         });
+}
+
+
+
+MinMaxFood MapReduceParallelStd::GetGreatestAndLeastPopularItems(const std::span<const bakery::Transaction>& span)
+{
+    using Monoid = std::array<int, 6>;
+    const auto Map = [this](const auto& transaction)
+    {
+        Monoid monoid{};
+        for (int foodID : transaction.GetPurchases())
+        {
+            const bakery::FoodItem& food = m_database.GetFood(foodID);
+            ++monoid.at(static_cast<std::size_t>(food.type));
+        }
+
+        return monoid;
+    };
+
+    const auto Reduce = [](const Monoid& aggregate, const Monoid& next)
+    {
+        Monoid result = aggregate;
+        for (std::size_t index = 0; index < result.size(); ++index)
+            result.at(index) += next.at(index);
+
+        return result;
+    };
+
+    const auto result = std::transform_reduce(std::execution::par_unseq, span.begin(), span.end(), Monoid{}, Reduce, Map);
+
+    const auto& [min, max] = std::ranges::minmax_element(result);
+
+    return { static_cast<bakery::FoodType>(std::distance(std::begin(result), min)),
+            static_cast<bakery::FoodType>(std::distance(std::begin(result), max)) };
+}
+
+std::size_t MapReduceParallelStd::GetNumberOfTransactionsOver15(const std::span<const bakery::Transaction>& span)
+{
+    using Monoid = int;
+    const auto Map = [this](const auto& transaction)
+    {
+        double total = 0.0;
+        for (int foodID : transaction.GetPurchases())
+        {
+            const bakery::FoodItem& food = m_database.GetFood(foodID);
+            total += food.cost;
+        }
+
+        return total > 15.0 ? 1 : 0;
+    };
+
+    return std::transform_reduce(std::execution::par_unseq, span.begin(), span.end(), Monoid{}, std::plus<int>{}, Map);
+}
+
+std::size_t MapReduceParallelStd::GetLargestNumberOfPurachasesMade(const std::span<const bakery::Transaction>& span)
+{
+    using Monoid = int;
+    const auto Map = [this](const auto& transaction) {
+        return transaction.GetPurchases().size();
+    };
+
+    const auto Reduce = [](const Monoid& aggregate, const Monoid& next) {
+        return std::max(aggregate, next);
+    };
+
+    return std::transform_reduce(std::execution::par_unseq, span.begin(), span.end(), Monoid{}, Reduce, Map);
 }
 } // end queries namespace

@@ -93,13 +93,15 @@ TEST_F(QueryTests, GreatestAndLeastPopularItems)
     queries::MapReduceParallel strat1{ database };
     queries::Sequential strat2{ database };
     queries::SequentialIA strat3{ database };
+    queries::MapReduceParallelStd strat4{ database };
 
     const auto [min1, max1] = strat1.GetGreatestAndLeastPopularItems(database.GetTransactions());
     const auto [min2, max2] = strat2.GetGreatestAndLeastPopularItems(database.GetTransactions());
     const auto [min3, max3] = strat3.GetGreatestAndLeastPopularItems(database.GetTransactions());
+    const auto [min4, max4] = strat4.GetGreatestAndLeastPopularItems(database.GetTransactions());
 
-    ASSERT_TRUE(min1 == min2 && min2 == min3);
-    ASSERT_TRUE(max1 == max2 && max2 == max3);
+    ASSERT_TRUE(min1 == min2 && min2 == min3 && min3 == min4);
+    ASSERT_TRUE(max1 == max2 && max2 == max3 && max3 == max4);
 }
 
 TEST_F(QueryTests, NumberOfTransactionsOver15)
@@ -109,12 +111,14 @@ TEST_F(QueryTests, NumberOfTransactionsOver15)
     queries::MapReduceParallel strat1{ database };
     queries::Sequential strat2{ database };
     queries::SequentialIA strat3{ database };
+    queries::MapReduceParallelStd strat4{ database };
 
     const std::size_t num1 = strat1.GetNumberOfTransactionsOver15(database.GetTransactions());
     const std::size_t num2 = strat2.GetNumberOfTransactionsOver15(database.GetTransactions());
     const std::size_t num3 = strat3.GetNumberOfTransactionsOver15(database.GetTransactions());
+    const std::size_t num4 = strat4.GetNumberOfTransactionsOver15(database.GetTransactions());
 
-    ASSERT_TRUE(num1 == num2 && num2 == num3);
+    ASSERT_TRUE(num1 == num2 && num2 == num3 && num3 == num4);
 }
 
 TEST_F(QueryTests, LargestNumberOfPurachasesMade)
@@ -124,10 +128,12 @@ TEST_F(QueryTests, LargestNumberOfPurachasesMade)
     queries::MapReduceParallel strat1{ database };
     queries::Sequential strat2{ database };
     queries::SequentialIA strat3{ database };
+    queries::MapReduceParallelStd strat4{ database };
 
     const std::size_t count1 = strat1.GetLargestNumberOfPurachasesMade(database.GetTransactions());
     const std::size_t count2 = strat2.GetLargestNumberOfPurachasesMade(database.GetTransactions());
     const std::size_t count3 = strat3.GetLargestNumberOfPurachasesMade(database.GetTransactions());
+    const std::size_t count4 = strat4.GetLargestNumberOfPurachasesMade(database.GetTransactions());
 
-    ASSERT_TRUE(count1 == count2 && count2 == count3);
+    ASSERT_TRUE(count1 == count2 && count2 == count3 && count3 == count4);
 }

@@ -5,8 +5,7 @@
 
 #include <numeric>
 
-//#define BENCHMARK_TRANSACTION_CREATION
-#ifdef BENCHMARK_TRANSACTION_CREATION
+#ifdef BM_TRANSACTION_CREATION
 static void ParallelTransactionCreationBM(benchmark::State& state)
 {
     const std::size_t amount = std::pow(10, state.range(0));
@@ -54,7 +53,6 @@ BENCHMARK(SequentialTransactionCreationBM)
     ->UseManualTime()->Unit(benchmark::TimeUnit::kMillisecond);
 
 #else
-
 static const bakery::Database g_database{ 100'000'000, true };
 static const std::array<std::span<const bakery::Transaction>, 7> spans = []()
 {
@@ -104,30 +102,9 @@ void LeastAndGreatestBM(benchmark::State& state)
         state.SetIterationTime(elapsed.count());
     }
 
-    state.SetItemsProcessed(state.iterations() * currentSpan.size());
+    state.SetItemsProcessed(state.iterations() * currentSpan.size() + numTransactions);
     state.counters["sample_size"] = currentSpan.size();
 }
-
-BENCHMARK_TEMPLATE(LeastAndGreatestBM, queries::MapReduceParallel)
-    ->DenseRange(0, 6)->ArgName("Span")
-    ->UseManualTime()->Unit(benchmark::TimeUnit::kMillisecond);
-
-BENCHMARK_TEMPLATE(LeastAndGreatestBM, queries::Sequential)
-    ->DenseRange(0, 6)->ArgName("Span")
-    ->UseManualTime()->Unit(benchmark::TimeUnit::kMillisecond);
-
-// The incremental aggregation queries are throttled by the automatic iteration count feature
-// of google benchmark. Once the sample size increases dramatically, to the point where a single
-// iteration takes all of the time allotted by google benchmark, then only one iteration will run.
-// This severely hinders the performance of incremental aggregation, as the first run is always
-// the slowest, and all successive are nearly O(1) speed. Thus, manually specify the number of
-// iterations to obtain a more reasonable approximation of the performance of larger sample sizes.
-BENCHMARK_TEMPLATE(LeastAndGreatestBM, queries::SequentialIA)
-    ->DenseRange(0, 6)->ArgName("Span")
-    ->UseManualTime()->Unit(benchmark::TimeUnit::kMillisecond)
-    ->Iterations(1000000);
-
-
 
 template<typename Derived>
     requires std::derived_from< Derived, queries::QueryStrategies>
@@ -159,24 +136,9 @@ void LargestNumberOfPurchasesBM(benchmark::State& state)
         state.SetIterationTime(elapsed.count());       
     }
 
-    state.SetItemsProcessed(state.iterations() * currentSpan.size());
+    state.SetItemsProcessed(state.iterations() * currentSpan.size() + numTransactions);
     state.counters["sample_size"] = currentSpan.size();
 }
-
-BENCHMARK_TEMPLATE(LargestNumberOfPurchasesBM, queries::MapReduceParallel)
-    ->DenseRange(0, 6)->ArgName("Span")
-    ->UseManualTime()->Unit(benchmark::TimeUnit::kMillisecond);
-
-BENCHMARK_TEMPLATE(LargestNumberOfPurchasesBM, queries::Sequential)
-    ->DenseRange(0, 6)->ArgName("Span")
-    ->UseManualTime()->Unit(benchmark::TimeUnit::kMillisecond);
-
-BENCHMARK_TEMPLATE(LargestNumberOfPurchasesBM, queries::SequentialIA)
-    ->DenseRange(0, 6)->ArgName("Span")
-    ->UseManualTime()->Unit(benchmark::TimeUnit::kMillisecond)
-    ->Iterations(1000000);
-
-
 
 template<typename Derived>
     requires std::derived_from< Derived, queries::QueryStrategies>
@@ -207,22 +169,79 @@ void NumberOfTransactionsOver15BM(benchmark::State& state)
         state.SetIterationTime(elapsed.count());
     }
 
-    state.SetItemsProcessed(state.iterations() * currentSpan.size());
+    state.SetItemsProcessed(state.iterations() * currentSpan.size() + numTransactions);
     state.counters["sample_size"] = currentSpan.size();
 }
 
+#define BM_MAP_REDUCE_PARALLEL
+#define BM_MAP_REDUCE_PARALLEL_STD
+#define BM_SEQUENTIAL
+#define BM_SEQUENTIAL_IA
+
+#   if defined(BM_MAP_REDUCE_PARALLEL)
+BENCHMARK_TEMPLATE(LeastAndGreatestBM, queries::MapReduceParallel)
+    ->DenseRange(0, 6)->ArgName("Span")
+    ->UseManualTime()->Unit(benchmark::TimeUnit::kMillisecond);
+
+BENCHMARK_TEMPLATE(LargestNumberOfPurchasesBM, queries::MapReduceParallel)
+    ->DenseRange(0, 6)->ArgName("Span")
+    ->UseManualTime()->Unit(benchmark::TimeUnit::kMillisecond);
+
 BENCHMARK_TEMPLATE(NumberOfTransactionsOver15BM, queries::MapReduceParallel)
+    ->DenseRange(0, 6)->ArgName("Span")
+    ->UseManualTime()->Unit(benchmark::TimeUnit::kMillisecond);
+#   endif
+
+#   if defined(BM_MAP_REDUCE_PARALLEL_STD)
+BENCHMARK_TEMPLATE(LeastAndGreatestBM, queries::MapReduceParallelStd)
+    ->DenseRange(0, 6)->ArgName("Span")
+    ->UseManualTime()->Unit(benchmark::TimeUnit::kMillisecond);
+
+BENCHMARK_TEMPLATE(LargestNumberOfPurchasesBM, queries::MapReduceParallelStd)
+    ->DenseRange(0, 6)->ArgName("Span")
+    ->UseManualTime()->Unit(benchmark::TimeUnit::kMillisecond);
+
+BENCHMARK_TEMPLATE(NumberOfTransactionsOver15BM, queries::MapReduceParallelStd)
+    ->DenseRange(0, 6)->ArgName("Span")
+    ->UseManualTime()->Unit(benchmark::TimeUnit::kMillisecond);
+#   endif
+
+#   if defined(BM_SEQUENTIAL)
+BENCHMARK_TEMPLATE(LeastAndGreatestBM, queries::Sequential)
+    ->DenseRange(0, 6)->ArgName("Span")
+    ->UseManualTime()->Unit(benchmark::TimeUnit::kMillisecond);
+
+BENCHMARK_TEMPLATE(LargestNumberOfPurchasesBM, queries::Sequential)
     ->DenseRange(0, 6)->ArgName("Span")
     ->UseManualTime()->Unit(benchmark::TimeUnit::kMillisecond);
 
 BENCHMARK_TEMPLATE(NumberOfTransactionsOver15BM, queries::Sequential)
     ->DenseRange(0, 6)->ArgName("Span")
     ->UseManualTime()->Unit(benchmark::TimeUnit::kMillisecond);
+#   endif
+
+#   if defined(BM_SEQUENTIAL_IA)
+// The incremental aggregation queries are throttled by the automatic iteration count feature
+// of google benchmark. Once the sample size increases dramatically, to the point where a single
+// iteration takes all of the time allotted by google benchmark, then only one iteration will run.
+// This severely hinders the performance of incremental aggregation, as the first run is always
+// the slowest, and all successive are nearly O(1) speed. Thus, manually specify the number of
+// iterations to obtain a more reasonable approximation of the performance of larger sample sizes.
+BENCHMARK_TEMPLATE(LeastAndGreatestBM, queries::SequentialIA)
+    ->DenseRange(0, 6)->ArgName("Span")
+    ->UseManualTime()->Unit(benchmark::TimeUnit::kMillisecond)
+    ->Iterations(1000000);
+
+BENCHMARK_TEMPLATE(LargestNumberOfPurchasesBM, queries::SequentialIA)
+    ->DenseRange(0, 6)->ArgName("Span")
+    ->UseManualTime()->Unit(benchmark::TimeUnit::kMillisecond)
+    ->Iterations(1000000);
 
 BENCHMARK_TEMPLATE(NumberOfTransactionsOver15BM, queries::SequentialIA)
     ->DenseRange(0, 6)->ArgName("Span")
     ->UseManualTime()->Unit(benchmark::TimeUnit::kMillisecond)
     ->Iterations(1000000);
+#   endif
 #endif
 
 BENCHMARK_MAIN();

@@ -102,17 +102,17 @@ def main():
     q3_title = 'Number of Transactions over $15 - Throughput'
 
     def filter_q1(dataset):
-        return 'Least' in dataset.name
+        return 'Least' in dataset.name and 'Std' not in dataset.strategy
 
     def filter_q2(dataset):
-        return 'Largest' in dataset.name
+        return 'Largest' in dataset.name and 'Std' not in dataset.strategy
 
     def filter_q3(dataset):
-        return '15' in dataset.name
+        return '15' in dataset.name and 'Std' not in dataset.strategy
 
     def filter_q1_no_ia(dataset):
         return filter_q1(dataset) and 'IA' not in dataset.strategy
-
+                           
     def filter_q2_no_ia(dataset):
         return filter_q2(dataset) and 'IA' not in dataset.strategy
 
