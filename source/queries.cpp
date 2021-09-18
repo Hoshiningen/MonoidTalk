@@ -151,7 +151,52 @@ std::size_t SequentialIA::GetLargestNumberOfPurachasesMade(const std::span<const
     return m_query3Cache->aggregate;
 }
 
+/// <summary>
+/// This was implemented to evaluate how chunk size affects throughput in queries. What I was observing in the plots is that
+/// on my machine, the throughput caps at around 2500 transactions per chunk. I wanted to investigate how chunksize affects
+/// the overall computation time / throughput.
+/// </summary>
+MinMaxFood MapReduceParallel::GetGreatestAndLeastPopularItems(const std::span<const bakery::Transaction>& span, std::size_t chunkSize)
+{
+    using Monoid = std::array<int, 6>;
+    const auto Map = [this](const auto& transaction)
+    {
+        Monoid monoid{};
+        for (int foodID : transaction.GetPurchases())
+        {
+            const bakery::FoodItem& food = m_database.GetFood(foodID);
+            ++monoid.at(static_cast<std::size_t>(food.type));
+        }
 
+        return monoid;
+    };
+
+    const auto Reduce = [](const Monoid& aggregate, const Monoid& next)
+    {
+        Monoid result = aggregate;
+        for (std::size_t index = 0; index < result.size(); ++index)
+            result.at(index) += next.at(index);
+
+        return result;
+    };
+
+    std::vector<std::span<const bakery::Transaction>> chunks;
+    detail::Chunk(span, span.size() / chunkSize, chunks);
+
+    std::vector<std::future<Monoid>> futures;
+    for (const auto& chunk : chunks)
+        futures.push_back(m_pool.Run([&]() { return detail::MapReduce(chunk, Map, Reduce); }));
+
+    Monoid result = std::accumulate(std::begin(futures), std::end(futures), Monoid{},
+        [&](const Monoid& aggregate, std::future<Monoid>& next) {
+            return Reduce(aggregate, next.get());
+        });
+
+    const auto& [min, max] = std::ranges::minmax_element(result);
+
+    return {static_cast<bakery::FoodType>(std::distance(std::begin(result), min)),
+            static_cast<bakery::FoodType>(std::distance(std::begin(result), max))};
+}
 
 MinMaxFood MapReduceParallel::GetGreatestAndLeastPopularItems(const std::span<const bakery::Transaction>& span)
 {

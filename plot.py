@@ -66,19 +66,21 @@ def create_datasets(benchmark_data):
 def create_and_serialize_chart(iterable, title, file_name):
     """Generates a chart based on the given data and serializes it to disk"""
     fig, axis = plt.subplots()
+    fig.set_size_inches(16, 9)
+    line_formats = ['o-', 's-', 'd-', '^-']
 
     lines = []
-    for dataset in iterable:
-        line, = axis.plot(dataset.x, dataset.y, 'o-', label=dataset.strategy)
+    for index, dataset in enumerate(iterable):
+        line, = axis.plot(dataset.x, dataset.y, line_formats[index % len(line_formats)], label=dataset.strategy)
         lines.append(line)
 
     plt.legend(handles=lines)
     axis.set(xscale='log', yscale='log')
 
-    axis.set(xlabel='Sample Size', ylabel='Items / Second', title=title)
+    axis.set(xlabel='Sample Size', ylabel='Transactions / Second', title=title)
     axis.grid()
 
-    fig.savefig(f"{file_name}.png")
+    fig.savefig(f"{file_name}.png", dpi = 100)
 
 def setup_arguments():
     """Configures the acceptable command-line arguments."""
@@ -119,7 +121,7 @@ def main():
     def filter_q3_no_ia(dataset):
         return filter_q3(dataset) and 'IA' not in dataset.strategy
 
-    plt.style.use('seaborn-deep')
+    plt.style.use('tableau-colorblind10')
 
     create_and_serialize_chart(filter(filter_q1, datasets), q1_title, 'q1')
     create_and_serialize_chart(filter(filter_q2, datasets), q2_title, 'q2')

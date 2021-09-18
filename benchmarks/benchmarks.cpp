@@ -173,8 +173,45 @@ void NumberOfTransactionsOver15BM(benchmark::State& state)
     state.counters["sample_size"] = currentSpan.size();
 }
 
+#if defined(BM_CHUNK_SIZE)
+void ChunkSizeBM(benchmark::State& state)
+{
+    queries::MapReduceParallel query{ g_database };
+
+    bakery::detail::Random random;
+    std::size_t numTransactions = 0;
+
+    const auto fullSpan = std::span<const bakery::Transaction>(g_database.GetTransactions());
+    const auto& currentSpan = spans.at(6);
+
+    for (auto _ : state)
+    {
+        state.PauseTiming();
+
+        numTransactions += random.Value(4, 8);
+        const auto span = fullSpan.subspan(0, currentSpan.size() + numTransactions);
+
+        state.ResumeTiming();
+
+        const auto start = std::chrono::high_resolution_clock::now();
+        benchmark::DoNotOptimize(query.GetGreatestAndLeastPopularItems(span, state.range(0)));
+        const auto end = std::chrono::high_resolution_clock::now();
+
+        const auto elapsed = std::chrono::duration_cast<std::chrono::duration<double>>(end - start);
+        state.SetIterationTime(elapsed.count());
+    }
+
+    state.SetItemsProcessed(state.iterations() * currentSpan.size() + numTransactions);
+    state.counters["sample_size"] = currentSpan.size();
+}
+
+BENCHMARK(ChunkSizeBM)
+    ->DenseRange(1000, 10000, 500)
+    ->UseManualTime()->Unit(benchmark::TimeUnit::kMillisecond);
+#endif
+
 #define BM_MAP_REDUCE_PARALLEL
-#define BM_MAP_REDUCE_PARALLEL_STD
+//#define BM_MAP_REDUCE_PARALLEL_STD
 #define BM_SEQUENTIAL
 #define BM_SEQUENTIAL_IA
 

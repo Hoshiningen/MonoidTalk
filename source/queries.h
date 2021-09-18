@@ -118,6 +118,7 @@ public:
 
     virtual ~QueryStrategies() = default;
 
+    virtual MinMaxFood GetGreatestAndLeastPopularItems(const std::span<const bakery::Transaction>& span, std::size_t chunkSize) { return {}; }  
     virtual MinMaxFood GetGreatestAndLeastPopularItems(const std::span<const bakery::Transaction>& span) = 0;
     virtual std::size_t GetNumberOfTransactionsOver15(const std::span<const bakery::Transaction>& span) = 0;
     virtual std::size_t GetLargestNumberOfPurachasesMade(const std::span<const bakery::Transaction>& span) = 0;
@@ -160,6 +161,7 @@ public:
     using QueryStrategies::QueryStrategies;
 
     // Inherited via QueryStrategies
+    virtual MinMaxFood GetGreatestAndLeastPopularItems(const std::span<const bakery::Transaction>& span, std::size_t chunkSize) override;
     virtual MinMaxFood GetGreatestAndLeastPopularItems(const std::span<const bakery::Transaction>& span) override;
     virtual std::size_t GetNumberOfTransactionsOver15(const std::span<const bakery::Transaction>& span) override;
     virtual std::size_t GetLargestNumberOfPurachasesMade(const std::span<const bakery::Transaction>& span) override;
