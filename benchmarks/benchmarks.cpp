@@ -58,7 +58,7 @@ static const std::array<std::span<const bakery::Transaction>, 7> spans = []()
 {
     const auto& transactions = g_database.GetTransactions();
     return std::array<std::span<const bakery::Transaction>, 7>{
-        std::span{ transactions.cbegin(), std::next(transactions.cbegin(), 4) },
+        std::span{ transactions.cbegin(), std::next(transactions.cbegin(), std::thread::hardware_concurrency()) },
         std::span{ transactions.cbegin(), std::next(transactions.cbegin(), 1'000) },
         std::span{ transactions.cbegin(), std::next(transactions.cbegin(), 10'000) },
         std::span{ transactions.cbegin(), std::next(transactions.cbegin(), 100'000) },

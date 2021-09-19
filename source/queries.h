@@ -3,9 +3,14 @@
 #include "bakery.h"
 #include "ThreadPool.h"
 
+#include <array>
 #include <iterator>
+#include <optional>
 #include <span>
 #include <stdexcept>
+#include <type_traits>
+#include <utility>
+#include <vector>
 
 namespace queries
 {
