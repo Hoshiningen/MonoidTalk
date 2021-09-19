@@ -20,6 +20,7 @@ class BenchmarkResults(object):
         with open(results_file, 'r') as db:
             self.__dict__ = json.load(db)
 
+
 @dataclass
 class DataSet(object):
     """POD type for a plottable benchmark"""
@@ -27,11 +28,15 @@ class DataSet(object):
     strategy: str
     x: list[float]
     y: list[float]
+    times: list[float]
+    time_unit: str
+
 
 def decompose_name(benchmark_name):
     """Extracts the benchmark name and execution strategy from its run name"""
     match = re.match(r'(\w+)<queries::(\w+)>', benchmark_name)
     return match.groups()
+
 
 def create_datasets(benchmark_data):
     """Transforms the benchmark data into a dictionary of data sets"""
@@ -44,13 +49,16 @@ def create_datasets(benchmark_data):
             name,
             strategy,
             [benchmark['sample_size']],
-            [benchmark['items_per_second']]
+            [benchmark['items_per_second']],
+            [benchmark['real_time']],
+            benchmark['time_unit']
         )
 
     def Reduce(aggregate, item):
         """Reduce method, which aggregates x and y values in a dataset"""
         aggregate.x.extend(item.x)
         aggregate.y.extend(item.y)
+        aggregate.times.extend(item.times)
 
         return aggregate
 
@@ -63,16 +71,25 @@ def create_datasets(benchmark_data):
             
     return datasets.values()
 
+
 def create_and_serialize_chart(iterable, title, file_name):
     """Generates a chart based on the given data and serializes it to disk"""
     fig, axis = plt.subplots()
     fig.set_size_inches(16, 9)
     line_formats = ['o-', 's-', 'd-', '^-']
 
+    signs = [1, -1, -1]
+    
     lines = []
     for index, dataset in enumerate(iterable):
-        line, = axis.plot(dataset.x, dataset.y, line_formats[index % len(line_formats)], label=dataset.strategy)
+        format = line_formats[index % len(line_formats)]
+        line, = axis.plot(dataset.x, dataset.y, format, label=dataset.strategy)
         lines.append(line)
+
+        for time, x, y in zip(dataset.times, dataset.x, dataset.y):
+            axis.annotate(f'{time:.3f} {dataset.time_unit}', (x, y),
+                          textcoords="offset points", xytext=(0, 15 * signs[index]),
+                          horizontalalignment='center')
 
     plt.legend(handles=lines)
     axis.set(xscale='log', yscale='log')
@@ -81,6 +98,7 @@ def create_and_serialize_chart(iterable, title, file_name):
     axis.grid()
 
     fig.savefig(f"{file_name}.png", dpi = 100)
+
 
 def setup_arguments():
     """Configures the acceptable command-line arguments."""
@@ -92,6 +110,7 @@ def setup_arguments():
         help="An absolute or relative path to a .json google benchmarks results file")
 
     return parser
+
 
 def main():
     parser = setup_arguments()
@@ -112,23 +131,12 @@ def main():
     def filter_q3(dataset):
         return '15' in dataset.name and 'Std' not in dataset.strategy
 
-    def filter_q1_no_ia(dataset):
-        return filter_q1(dataset) and 'IA' not in dataset.strategy
-                           
-    def filter_q2_no_ia(dataset):
-        return filter_q2(dataset) and 'IA' not in dataset.strategy
-
-    def filter_q3_no_ia(dataset):
-        return filter_q3(dataset) and 'IA' not in dataset.strategy
-
     plt.style.use('tableau-colorblind10')
 
     create_and_serialize_chart(filter(filter_q1, datasets), q1_title, 'q1')
     create_and_serialize_chart(filter(filter_q2, datasets), q2_title, 'q2')
     create_and_serialize_chart(filter(filter_q3, datasets), q3_title, 'q3')
-    create_and_serialize_chart(filter(filter_q1_no_ia, datasets), q1_title, 'q1_no_ia')
-    create_and_serialize_chart(filter(filter_q2_no_ia, datasets), q2_title, 'q2_no_ia')
-    create_and_serialize_chart(filter(filter_q3_no_ia, datasets), q3_title, 'q3_no_ia')
+
 
 if __name__ == "__main__":
     main()
