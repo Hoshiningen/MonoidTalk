@@ -47,30 +47,6 @@ void Chunk(const std::span<T>& span, std::size_t numChunks, std::vector<std::spa
 }
 
 /// <summary>
-/// This chunks up the given container into a series of spans. It's required that the container have a
-/// size that's a multiple of the number of chunks requested.
-/// </summary>
-template <typename Container, typename Value = typename Container::value_type>
-    requires std::contiguous_iterator<typename Container::const_iterator>
-void Chunk(Container& container, std::size_t numChunks, std::vector<std::span<Value>>& spans)
-{
-    // This is pretty lame, but I don't want to spend the time to get this working right.
-    if (numChunks > container.size() || container.size() % numChunks != 0)
-        throw std::invalid_argument{ "Can't evenly chunk the container." };
-
-    spans.clear();
-
-    // Determine the amount of work to do on each thread
-    const std::ptrdiff_t chunkSize = container.size() / numChunks;
-    for (auto i = 1; i <= numChunks; ++i)
-    {
-        spans.emplace_back(
-            std::next(container.begin(), (i - 1) * chunkSize),
-            std::next(container.begin(), i * chunkSize));
-    }
-}
-
-/// <summary>
 /// This is a map-reduce function. It's intended to be thrown on a thread in a type-erased lambda, and is
 /// used in the map-reduce parallel queries.
 /// 

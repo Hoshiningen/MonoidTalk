@@ -222,7 +222,8 @@ std::vector<Transaction> GenerateTransactionsParallel(std::size_t amount)
 
     // Chunk up the work...
     std::vector<std::span<Transaction>> chunks;
-    queries::detail::Chunk(transactions, std::thread::hardware_concurrency(), chunks);
+    const std::span<Transaction> span{ transactions };
+    queries::detail::Chunk(span, std::thread::hardware_concurrency(), chunks);
 
     const auto CreateTransactions = [&random](const std::span<Transaction>& span, int minID, int maxID)
     {
