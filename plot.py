@@ -106,7 +106,7 @@ def setup_arguments():
     parser = argparse.ArgumentParser(
         description="Generate line graphs for benchmark results")
 
-    parser.add_argument("results", nargs=1, type=BenchmarkResults,
+    parser.add_argument("results", type=BenchmarkResults,
         help="An absolute or relative path to a .json google benchmarks results file")
 
     return parser
@@ -116,11 +116,11 @@ def main():
     parser = setup_arguments()
     args = parser.parse_args()
 
-    datasets = create_datasets(args.results[0].benchmarks)
+    datasets = create_datasets(args.results.benchmarks)
 
-    q1_title = 'Least and Most Popular - Throughput'
-    q2_title = 'Largest Number of Purchases - Throughput'
-    q3_title = 'Number of Transactions over $15 - Throughput'
+    q1_title = f'Least and Most Popular - {args.results.context["num_cpus"]} Threads'
+    q2_title = f'Largest Number of Purchases - {args.results.context["num_cpus"]} Threads'
+    q3_title = f'Number of Transactions over $15 - {args.results.context["num_cpus"]} Threads'
 
     def filter_q1(dataset):
         return 'Least' in dataset.name and 'Std' not in dataset.strategy
