@@ -75,22 +75,15 @@ def create_datasets(benchmark_data):
 def create_and_serialize_chart(iterable, title, file_name):
     """Generates a chart based on the given data and serializes it to disk"""
     fig, axis = plt.subplots()
-    fig.set_size_inches(16, 9)
+    fig.set_size_inches(8, 4.5)
     line_formats = ['o-', 's-', 'd-', '^-']
 
-    signs = [1, -1, -1]
-    
     lines = []
-    for index, dataset in enumerate(iterable):
+    for index, dataset in enumerate(sorted(iterable, key=lambda dataset: dataset.y[0], reverse=True)):
         format = line_formats[index % len(line_formats)]
         line, = axis.plot(dataset.x, dataset.y, format, label=dataset.strategy)
         lines.append(line)
-
-        for time, x, y in zip(dataset.times, dataset.x, dataset.y):
-            axis.annotate(f'{time:.3f} {dataset.time_unit}', (x, y),
-                          textcoords="offset points", xytext=(0, 15 * signs[index]),
-                          horizontalalignment='center')
-
+    
     plt.legend(handles=lines)
     axis.set(xscale='log', yscale='log')
 
@@ -118,9 +111,9 @@ def main():
 
     datasets = create_datasets(args.results.benchmarks)
 
-    q1_title = f'Least and Most Popular - {args.results.context["num_cpus"]} Threads'
-    q2_title = f'Largest Number of Purchases - {args.results.context["num_cpus"]} Threads'
-    q3_title = f'Number of Transactions over $15 - {args.results.context["num_cpus"]} Threads'
+    q1_title = f'Least and Most Popular Bakery Products - Throughput'
+    q2_title = f'Largest Number of Purchases - Throughput'
+    q3_title = f'Number of Transactions over $15 - Throughput'
 
     def filter_q1(dataset):
         return 'Least' in dataset.name and 'Std' not in dataset.strategy
